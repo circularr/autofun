@@ -124,7 +124,7 @@ function App() {
   const [filteredTokens, setFilteredTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [chartTab, setChartTab] = useState('tokens');  // 'tokens', 'creators', 'volume', 'marketcap', 'buyers'
+  const [chartTab, setChartTab] = useState('tokens');  // 'tokens', 'creators', 'volume', 'buyers'
   const [cursorVisible, setCursorVisible] = useState(true);
   const [sortConfig, setSortConfig] = useState({
     key: 'marketCapUSD',
@@ -136,7 +136,6 @@ function App() {
   const [chartData, setChartData] = useState({
     labels: [],
     data: [],
-    title: '',
     backgroundColor: '#00FF00',
     borderColor: '#00FF00',
     yAxisFormat: (value) => value
@@ -144,6 +143,7 @@ function App() {
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const [infoContent, setInfoContent] = useState('');
   const popupRef = useRef(null);
+  const [chartMode, setChartMode] = useState('hourly');
 
   // Function to handle clicking outside popup
   useEffect(() => {
@@ -185,7 +185,7 @@ function App() {
         const activeTokens = allTokens.filter(token => token.status === "active");
         setTokens(activeTokens);
         setLoading(false);
-        updateChartData(activeTokens, chartTab);
+        updateTokensCreatedChart(activeTokens, chartMode);
       })
       .catch((err) => {
         console.error("API fetch error:", err);
@@ -195,35 +195,32 @@ function App() {
   };
 
   // Update chart data based on the selected tab
-  const updateChartData = (tokensList, tab) => {
+  const updateChartData = (tokensList, tab, mode) => {
     switch (tab) {
       case 'tokens':
-        updateTokensCreatedChart(tokensList);
+        updateTokensCreatedChart(tokensList, mode);
         break;
       case 'creators':
-        updateUniqueCreatorsChart(tokensList);
+        updateUniqueCreatorsChart(tokensList, mode);
         break;
       case 'volume':
-        updateVolumeChart(tokensList);
-        break;
-      case 'marketcap':
-        updateMarketCapChart(tokensList);
+        updateVolumeChart(tokensList, mode);
         break;
       case 'buyers':
-        updateBuyersChart(tokensList);
+        updateBuyersChart(tokensList, mode);
         break;
       default:
-        updateTokensCreatedChart(tokensList);
+        updateTokensCreatedChart(tokensList, mode);
     }
   };
 
   // Fix: Ensure chart updates when chartTab changes
   useEffect(() => {
     if (tokens.length > 0) {
-      updateChartData(tokens, chartTab);
+      updateChartData(tokens, chartTab, chartMode);
     }
     // eslint-disable-next-line
-  }, [chartTab]);
+  }, [chartTab, chartMode]);
 
   // Common function to generate continuous timeline labels for last 24 hours
   const generateTimelineLabels = () => {
@@ -249,9 +246,9 @@ function App() {
   };
 
   // Chart 1: Tokens created over time (last 24 hours)
-  const updateTokensCreatedChart = (tokensList) => {
+  const updateTokensCreatedChart = (tokensList, mode = 'hourly') => {
     const { labels, timestamps } = generateTimelineLabels();
-    const hourData = Array(24).fill(0);
+    let hourData = Array(24).fill(0);
     
     // Filter tokens by creation time (last 24 hours)
     const now = new Date();
@@ -283,10 +280,17 @@ function App() {
       }
     });
     
+    if (mode === 'cumulative') {
+      // Convert to cumulative sum
+      hourData = hourData.reduce((acc, val, idx) => {
+        acc.push((acc[idx - 1] || 0) + val);
+        return acc;
+      }, []);
+    }
+    
     setChartData({
       labels,
       data: hourData,
-      title: 'Last 24 Hours',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => value.toLocaleString()
@@ -294,9 +298,9 @@ function App() {
   };
 
   // Chart 2: Unique creators over time (last 24 hours)
-  const updateUniqueCreatorsChart = (tokensList) => {
+  const updateUniqueCreatorsChart = (tokensList, mode = 'hourly') => {
     const { labels, timestamps } = generateTimelineLabels();
-    const creatorsByHour = Array(24).fill().map(() => new Set());
+    let hourData = Array(24).fill(0);
     
     // Get current date/time
     const now = new Date();
@@ -320,24 +324,28 @@ function App() {
       // Find which hour slot this token belongs to
       for (let i = 0; i < timestamps.length - 1; i++) {
         if (tokenTime >= timestamps[i] && tokenTime < timestamps[i + 1]) {
-          creatorsByHour[i].add(token.creator);
+          hourData[i]++;
           break;
         }
       }
       
       // Check the last hour slot separately
       if (tokenTime >= timestamps[timestamps.length - 1] && tokenTime <= now.getTime()) {
-        creatorsByHour[timestamps.length - 1].add(token.creator);
+        hourData[timestamps.length - 1]++;
       }
     });
     
-    // Convert sets to counts
-    const hourData = creatorsByHour.map(set => set.size);
+    if (mode === 'cumulative') {
+      // Convert to cumulative sum
+      hourData = hourData.reduce((acc, val, idx) => {
+        acc.push((acc[idx - 1] || 0) + val);
+        return acc;
+      }, []);
+    }
     
     setChartData({
       labels,
       data: hourData,
-      title: 'Last 24 Hours',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => value.toLocaleString()
@@ -345,82 +353,41 @@ function App() {
   };
 
   // Chart 3: Total volume over time (last 24 hours) - hourly, not cumulative
-  const updateVolumeChart = (tokensList) => {
+  const updateVolumeChart = (tokensList, mode = 'hourly') => {
     const { labels, timestamps } = generateTimelineLabels();
-    const hourData = Array(24).fill(0);
-    
-    // Get tokens with volume data
-    const tokensWithVolume = tokensList.filter(token => 
-      token.createdAt && (token.volume24h !== undefined || token.volume !== undefined)
-    );
-    
-    // For each hour slot, calculate volume for that specific hour
+    let hourData = Array(24).fill(0);
     for (let i = 0; i < timestamps.length; i++) {
       const currentHourStart = timestamps[i];
-      
-      // Set end timestamp (either next hour or current time if last hour)
       const currentHourEnd = i < timestamps.length - 1 
         ? timestamps[i + 1] 
         : new Date().getTime();
-      
-      // Get tokens that had activity in this hour window
-      tokensWithVolume.forEach(token => {
-        const tokenCreationTime = new Date(token.createdAt).getTime();
-        
-        // Only include tokens created in this specific hour window
-        if (tokenCreationTime >= currentHourStart && tokenCreationTime < currentHourEnd) {
-          // Get hourly volume (daily volume / 24 as an approximation)
-          const volume = parseFloat(token.volume24h || token.volume || 0) / 24;
-          hourData[i] += volume;
+      tokensList.forEach(token => {
+        // Only count tokens that existed during this hour
+        if (token.createdAt) {
+          const tokenCreationTime = new Date(token.createdAt).getTime();
+          // If token has volume data and was created before this hour ends
+          if (tokenCreationTime <= currentHourEnd && (token.volume24h !== undefined || token.volume !== undefined)) {
+            // If token has a per-hour volume array, use it; otherwise, try to estimate as flat per hour
+            if (Array.isArray(token.hourlyVolume) && token.hourlyVolume.length === 24) {
+              hourData[i] += parseFloat(token.hourlyVolume[i]) || 0;
+            } else {
+              // Spread 24h volume evenly for now (fallback)
+              const vol = parseFloat(token.volume24h || token.volume || 0);
+              hourData[i] += vol / 24;
+            }
+          }
         }
       });
     }
-    
-    setChartData({
-      labels,
-      data: hourData,
-      title: 'Last 24 Hours (Hourly)',
-      backgroundColor: '#00FF00',
-      borderColor: '#00FF00',
-      yAxisFormat: (value) => '$' + formatNumber(value)
-    });
-  };
-
-  // Chart 4: Market cap per hour (last 24 hours) - hourly, not cumulative
-  const updateMarketCapChart = (tokensList) => {
-    const { labels, timestamps } = generateTimelineLabels();
-    const hourData = Array(24).fill(0);
-    
-    // Get tokens with market cap data
-    const tokensWithMarketCap = tokensList.filter(token => 
-      token.createdAt && (token.marketCapUSD !== undefined || token.marketCap !== undefined)
-    );
-    
-    // For each hour slot, calculate market cap for that specific hour
-    for (let i = 0; i < timestamps.length; i++) {
-      const currentHourStart = timestamps[i];
-      
-      // Set end timestamp (either next hour or current time if last hour)
-      const currentHourEnd = i < timestamps.length - 1 
-        ? timestamps[i + 1] 
-        : new Date().getTime();
-      
-      // Get tokens that were created in this hour window
-      tokensWithMarketCap.forEach(token => {
-        const tokenCreationTime = new Date(token.createdAt).getTime();
-        
-        // Only include tokens created in this specific hour window
-        if (tokenCreationTime >= currentHourStart && tokenCreationTime < currentHourEnd) {
-          const marketCap = parseFloat(token.marketCapUSD || token.marketCap || 0);
-          hourData[i] += marketCap;
-        }
-      });
+    if (mode === 'cumulative') {
+      hourData = hourData.reduce((acc, val, idx) => {
+        acc.push((acc[idx - 1] || 0) + val);
+        return acc;
+      }, []);
     }
-    
     setChartData({
       labels,
       data: hourData,
-      title: 'Last 24 Hours (Hourly)',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => '$' + formatNumber(value)
@@ -428,9 +395,9 @@ function App() {
   };
 
   // Chart 5: Total buyers over time (last 24 hours)
-  const updateBuyersChart = (tokensList) => {
+  const updateBuyersChart = (tokensList, mode = 'hourly') => {
     const { labels, timestamps } = generateTimelineLabels();
-    const hourData = Array(24).fill(0);
+    let hourData = Array(24).fill(0);
     
     // Get tokens with buyers data
     const tokensWithBuyers = tokensList.filter(token => 
@@ -454,11 +421,15 @@ function App() {
         return sum + parseInt(buyerCount);
       }, 0);
     }
-    
+    if (mode === 'cumulative') {
+      hourData = hourData.reduce((acc, val, idx) => {
+        acc.push((acc[idx - 1] || 0) + val);
+        return acc;
+      }, []);
+    }
     setChartData({
       labels,
       data: hourData,
-      title: 'Last 24 Hours',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => formatNumber(value)
@@ -552,29 +523,32 @@ function App() {
   };
 
   // Function to show info tooltip with explanation of chart data
-  const showChartInfo = (chartType) => {
+  const showChartInfo = (chartType, mode) => {
     let content = '';
-    
     switch(chartType) {
       case 'tokens':
-        content = 'Displays the number of tokens created in each hour over the last 24 hours.';
+        content = mode === 'cumulative'
+          ? 'Cumulative: Running total of tokens created up to each hour.'
+          : 'Hourly: Number of tokens created in each hour.';
         break;
       case 'creators':
-        content = 'Shows the number of unique creators who launched tokens in each hour over the last 24 hours.';
+        content = mode === 'cumulative'
+          ? 'Cumulative: Running total of unique creators up to each hour.'
+          : 'Hourly: Unique creators who launched tokens in each hour.';
         break;
       case 'volume':
-        content = 'Shows the estimated trading volume for each hour (calculated as 1/24th of daily volume for new tokens created in that hour).';
-        break;
-      case 'marketcap':
-        content = 'Displays the market capitalization for new tokens created in each specific hour.';
+        content = mode === 'cumulative'
+          ? 'Cumulative: Running total of all trading volume up to each hour.'
+          : 'Hourly: Total trading volume for all tokens in each hour.';
         break;
       case 'buyers':
-        content = 'Shows the number of unique buyers/holders for tokens created in each hour.';
+        content = mode === 'cumulative'
+          ? 'Cumulative: Running total of buyers for all tokens up to each hour.'
+          : 'Hourly: Total buyers for all tokens in each hour.';
         break;
       default:
-        content = 'Chart shows data for the last 24 hours.';
+        content = 'Shows token metrics for the last 24 hours.';
     }
-    
     setInfoContent(content);
     setShowInfoTooltip(true);
   };
@@ -607,16 +581,7 @@ function App() {
         display: false,
       },
       title: {
-        display: true,
-        text: chartData.title,
-        font: {
-          size: 14,
-          weight: 'bold'
-        },
-        padding: {
-          bottom: 15
-        },
-        color: '#00FF00'
+        display: false,
       },
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -635,9 +600,6 @@ function App() {
                 label = `${value.toLocaleString()} creator${value !== 1 ? 's' : ''}`;
                 break;
               case 'volume':
-                label = `$${formatNumber(value)}`;
-                break;
-              case 'marketcap':
                 label = `$${formatNumber(value)}`;
                 break;
               case 'buyers':
@@ -677,11 +639,12 @@ function App() {
         },
         ticks: {
           font: {
-            size: 10
+            size: isMobile() ? 10 : 13,
+            weight: isMobile() ? '400' : '500',
           },
           color: '#00FF00',
-          maxTicksLimit: 12,
-          padding: 10
+          maxTicksLimit: isMobile() ? 6 : 12,
+          padding: isMobile() ? 4 : 6
         }
       }
     }
@@ -693,13 +656,13 @@ function App() {
         <a href="https://auto.fun" target="_blank" rel="noopener noreferrer" style={{ color: '#00FF00', textDecoration: 'none', fontWeight: 800, letterSpacing: '1px', fontSize: 'inherit' }}>auto.fun</a>
       </h1>
       
-      <div className="chart-container">
+      <div className="chart-container" style={{ paddingBottom: '20px' }}>
         <div className="chart-tabs">
           <button 
             className={`chart-tab ${chartTab === 'tokens' ? 'active' : ''}`}
             onClick={() => changeChartTab('tokens')}
           >
-            {isMobile() ? 'Tokens' : 'Tokens Created'}
+            {isMobile() ? 'Tokens' : <span style={{color:'#fff'}}>Tokens Created</span>}
           </button>
           <button 
             className={`chart-tab ${chartTab === 'creators' ? 'active' : ''}`}
@@ -711,27 +674,36 @@ function App() {
             className={`chart-tab ${chartTab === 'volume' ? 'active' : ''}`}
             onClick={() => changeChartTab('volume')}
           >
-            {isMobile() ? 'Vol.' : 'Volume'}
-          </button>
-          <button 
-            className={`chart-tab ${chartTab === 'marketcap' ? 'active' : ''}`}
-            onClick={() => changeChartTab('marketcap')}
-          >
-            {isMobile() ? 'M.Cap' : 'Market Cap'}
+            {isMobile() ? 'Volume' : 'Volume'}
           </button>
           <button 
             className={`chart-tab ${chartTab === 'buyers' ? 'active' : ''}`}
             onClick={() => changeChartTab('buyers')}
           >
-            {isMobile() ? "Buy'r" : 'Buyers'}
+            {isMobile() ? 'Buyers' : 'Buyers'}
           </button>
         </div>
         
         <div className="chart-header">
-          <div className="chart-title">{chartData.title}</div>
+          <div className="chart-mode-toggle-group">
+            <button
+              className={`krug-toggle-small${chartMode === 'hourly' ? ' active' : ''}`}
+              onClick={() => setChartMode('hourly')}
+              aria-label="Show hourly chart"
+            >
+              Hourly
+            </button>
+            <button
+              className={`krug-toggle-small${chartMode === 'cumulative' ? ' active' : ''}`}
+              onClick={() => setChartMode('cumulative')}
+              aria-label="Show cumulative chart"
+            >
+              Cumulative
+            </button>
+          </div>
           <button 
             className="info-button" 
-            onClick={() => showChartInfo(chartTab)}
+            onClick={() => showChartInfo(chartTab, chartMode)}
             aria-label="Chart information"
           >
             i
@@ -794,10 +766,10 @@ function App() {
               ...chartOptions.scales.x,
               ticks: {
                 ...chartOptions.scales.x.ticks,
-                font: { size: isMobile() ? 9 : 10 },
+                font: { size: isMobile() ? 9 : 13, weight: isMobile() ? '400' : '500' },
                 color: '#00FF00',
                 maxTicksLimit: isMobile() ? 6 : 12,
-                padding: isMobile() ? 4 : 10
+                padding: isMobile() ? 4 : 6
               },
               grid: {
                 ...chartOptions.scales.x.grid,
@@ -992,10 +964,13 @@ function App() {
         </div>
       )}
       
-      <footer>
-        <a href="https://auto.fun" target="_blank" rel="noopener noreferrer">auto.fun</a>
-        <div className="token-stats">Total active tokens: {tokens.length}</div>
-        <a href="https://github.com/circularr/autofun" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <footer className="sticky">
+        <span>
+          Built by <a href="https://github.com/circularr/autofun" target="_blank" rel="noopener noreferrer">@circularr</a> 3; Powered by <a href="https://auto.fun" target="_blank" rel="noopener noreferrer">auto.fun</a>
+        </span>
+        <span>
+          <a href="https://github.com/circularr/autofun" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </span>
       </footer>
     </div>
   );
