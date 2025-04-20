@@ -530,26 +530,33 @@ footer a:hover:after {
 
 /* Minimal created-at column for mobile */
 @media (max-width: 768px) {
+  /* Ensure all table rows have consistent borders */
+  tr {
+    border-bottom: 1px solid rgba(0, 255, 0, 0.1);
+  }
+  
+  td {
+    font-size: 12px;
+    border-bottom: none; /* Remove individual cell borders */
+  }
+  
+  th {
+    font-size: 12px;
+  }
+  
   th:last-child,
   td:last-child {
     max-width: 36px;
     min-width: 30px;
     width: 36px;
     font-size: 10px;
-    color: #aaa;
+    color: var(--neon-green);
     padding: 0 2px !important;
     text-align: right;
     letter-spacing: 0.5px;
-    background: none;
-    border: none;
     white-space: nowrap;
   }
-  td {
-    font-size: 12px;
-  }
-  th {
-    font-size: 12px;
-  }
+  
   td.ticker-col, th.ticker-col {
     max-width: 48px;
     width: 48px;
@@ -558,18 +565,17 @@ footer a:hover:after {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  
   td.since-col, th.since-col {
     max-width: 44px;
     min-width: 36px;
     width: 44px;
     padding: 0 2px !important;
     font-size: 12px;
-    color: inherit !important;
+    color: var(--neon-green) !important;
     text-align: right;
     white-space: nowrap;
     letter-spacing: 0.3px;
-    background: none;
-    border: none;
     font-weight: inherit;
   }
 }

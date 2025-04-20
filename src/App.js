@@ -32,9 +32,9 @@ function formatNumber(num) {
   if (num === null || num === undefined) return "-";
   if (typeof num === "string") num = Number(num);
   if (isNaN(num)) return "-";
-  if (num > 1e6) return (num / 1e6).toFixed(2) + "M";
-  if (num > 1e3) return (num / 1e3).toFixed(2) + "K";
-  return num.toLocaleString();
+  if (num > 1e6) return Math.round(num / 1e6) + "M";
+  if (num > 1e3) return Math.round(num / 1e3) + "K";
+  return Math.round(num).toLocaleString();
 }
 
 // Format relative time (e.g., "2 hours ago")
@@ -843,7 +843,9 @@ function App() {
                     : null;
                 let liqDisplay = '-';
                 if (liqNum !== null && !isNaN(liqNum)) {
-                  liqDisplay = isMobile() ? Math.round(liqNum) : liqNum.toFixed(2) + '%';
+                  liqDisplay = isMobile() 
+                    ? Math.round(liqNum) 
+                    : Math.round(liqNum) + '%';
                 }
                 // Format volume (mobile: round down, no dp)
                 let volDisplay = '-';
@@ -970,9 +972,9 @@ function App() {
                     <div style={{ color: '#fff', marginBottom: 4 }}><b>Since:</b> {timeAgo(t.createdAt)}</div>
                     <div style={{ color: '#fff', marginBottom: 4 }}><b>Liq%:</b> {
                       t.liquidityPercent !== undefined && t.liquidityPercent !== null
-                        ? `${parseFloat(t.liquidityPercent).toFixed(2)}%`
+                        ? `${Math.round(parseFloat(t.liquidityPercent))}%`
                         : (t.liquidity !== undefined && t.liquidity !== null && t.marketCapUSD && t.marketCapUSD > 0)
-                          ? `${((parseFloat(t.liquidity) / parseFloat(t.marketCapUSD)) * 100).toFixed(2)}%`
+                          ? `${Math.round((parseFloat(t.liquidity) / parseFloat(t.marketCapUSD)) * 100)}%`
                           : '-'
                     }</div>
                   </div>
