@@ -11,6 +11,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import { fetchWithProxy } from "./proxy";
 
 // Register Chart.js components
 ChartJS.register(
@@ -23,8 +24,10 @@ ChartJS.register(
   Legend
 );
 
+// Direct API URL (will be proxied client-side to avoid CORS)
 const API_URL = "https://api.auto.fun/api/tokens";
 
+// Utility functions
 function formatNumber(num) {
   if (num === null || num === undefined) return "-";
   if (typeof num === "string") num = Number(num);
@@ -158,37 +161,20 @@ function App() {
   const fetchAllTokens = () => {
     setLoading(true);
     setError(null);
-    
+
     // Request all active tokens at once (based on the API response, there are ~383 tokens total)
     const url = `${API_URL}?limit=1000&page=1&sortBy=createdAt&sortOrder=asc&hideImported=1`;
-    
+
     console.log("Fetching all tokens from:", url);
-    
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
+
+    // Use the proxy utility to handle CORS issues
+    fetchWithProxy(url)
       .then((data) => {
-        console.log(`Fetched data with ${data.tokens ? data.tokens.length : 0} tokens`);
-        
-        // Get tokens array safely and filter for active tokens only
-        const allTokens = Array.isArray(data?.tokens) ? data.tokens : [];
-        
+        const allTokens = data.tokens || [];
         // Filter for active tokens only
         const activeTokens = allTokens.filter(token => token.status === "active");
-        
-        console.log(`Filtered to ${activeTokens.length} active tokens`);
-        
-        // Store active tokens only
         setTokens(activeTokens);
-        
-        // Update UI
         setLoading(false);
-        
-        // Update chart data for current tab
         updateChartData(activeTokens, chartTab);
       })
       .catch((err) => {
