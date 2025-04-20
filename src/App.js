@@ -124,15 +124,25 @@ function App() {
   const [filteredTokens, setFilteredTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [chartTab, setChartTab] = useState('tokens');  // 'tokens', 'creators', 'volume', 'marketcap', 'holders'
+  const [chartTab, setChartTab] = useState('tokens');  // 'tokens', 'creators', 'volume', 'marketcap', 'buyers'
   const [cursorVisible, setCursorVisible] = useState(true);
   const [sortConfig, setSortConfig] = useState({
-    key: 'createdAt',
+    key: 'marketCapUSD',
     direction: 'desc'
   });
   const [showAddressPopup, setShowAddressPopup] = useState(false);
   const [activeAddress, setActiveAddress] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
+  const [chartData, setChartData] = useState({
+    labels: [],
+    data: [],
+    title: '',
+    backgroundColor: '#00FF00',
+    borderColor: '#00FF00',
+    yAxisFormat: (value) => value
+  });
+  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
+  const [infoContent, setInfoContent] = useState('');
   const popupRef = useRef(null);
 
   // Function to handle clicking outside popup
@@ -199,8 +209,8 @@ function App() {
       case 'marketcap':
         updateMarketCapChart(tokensList);
         break;
-      case 'holders':
-        updateHoldersChart(tokensList);
+      case 'buyers':
+        updateBuyersChart(tokensList);
         break;
       default:
         updateTokensCreatedChart(tokensList);
@@ -215,291 +225,240 @@ function App() {
     // eslint-disable-next-line
   }, [chartTab]);
 
+  // Common function to generate continuous timeline labels for last 24 hours
+  const generateTimelineLabels = () => {
+    const now = new Date();
+    const labels = [];
+    const timestamps = [];
+    
+    // Generate 24 hour points, from 24 hours ago to now
+    for (let i = 23; i >= 0; i--) {
+      const hourAgo = new Date(now);
+      hourAgo.setHours(now.getHours() - i);
+      
+      // Format hour labels with AM/PM
+      const hour = hourAgo.getHours();
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12; // Convert 0 to 12 for 12 AM
+      
+      labels.push(`${hour12}${ampm}`);
+      timestamps.push(hourAgo.getTime());
+    }
+    
+    return { labels, timestamps };
+  };
+
   // Chart 1: Tokens created over time (last 24 hours)
   const updateTokensCreatedChart = (tokensList) => {
-    // Get current date/time
+    const { labels, timestamps } = generateTimelineLabels();
+    const hourData = Array(24).fill(0);
+    
+    // Filter tokens by creation time (last 24 hours)
     const now = new Date();
     const twentyFourHoursAgo = new Date(now);
     twentyFourHoursAgo.setHours(now.getHours() - 24);
     
-    // Create empty slots for all 24 hours
-    const hourCounts = {};
-    for (let i = 0; i < 24; i++) {
-      const hourAgo = new Date(now);
-      hourAgo.setHours(now.getHours() - i);
-      const hourKey = hourAgo.getHours();
-      hourCounts[hourKey] = 0;
-    }
-    
-    // Filter tokens by creation time (last 24 hours)
     const relevantTokens = tokensList.filter(token => {
-      const createdAt = new Date(token.createdAt);
-      return createdAt >= twentyFourHoursAgo && createdAt <= now;
+      if (!token.createdAt) return false;
+      
+      const tokenDate = new Date(token.createdAt);
+      return tokenDate >= twentyFourHoursAgo && tokenDate <= now;
     });
     
-    // Group by hour
+    // Count tokens per hour slot in our timeline
     relevantTokens.forEach(token => {
-      if (token.createdAt) {
-        const date = new Date(token.createdAt);
-        const hour = date.getHours();
-        hourCounts[hour]++;
+      const tokenTime = new Date(token.createdAt).getTime();
+      
+      // Find which hour slot this token belongs to
+      for (let i = 0; i < timestamps.length - 1; i++) {
+        if (tokenTime >= timestamps[i] && tokenTime < timestamps[i + 1]) {
+          hourData[i]++;
+          break;
+        }
+      }
+      
+      // Check the last hour slot separately
+      if (tokenTime >= timestamps[timestamps.length - 1] && tokenTime <= now.getTime()) {
+        hourData[timestamps.length - 1]++;
       }
     });
     
-    // Convert to arrays for Chart.js - in chronological order
-    const hoursSorted = Object.keys(hourCounts)
-      .map(Number)
-      .sort((a, b) => a - b);
-    
-    // Format hour labels with AM/PM
-    const hourLabels = hoursSorted.map(hour => {
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const hour12 = hour % 12 || 12; // Convert 0 to 12 for 12 AM
-      return `${hour12}${ampm}`;
-    });
-    
-    const hourData = hoursSorted.map(hour => hourCounts[hour]);
-    
     setChartData({
-      labels: hourLabels,
+      labels,
       data: hourData,
-      title: 'Active Curves',
+      title: 'Last 24 Hours',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => value.toLocaleString()
     });
   };
-  
+
   // Chart 2: Unique creators over time (last 24 hours)
   const updateUniqueCreatorsChart = (tokensList) => {
+    const { labels, timestamps } = generateTimelineLabels();
+    const creatorsByHour = Array(24).fill().map(() => new Set());
+    
     // Get current date/time
     const now = new Date();
     const twentyFourHoursAgo = new Date(now);
     twentyFourHoursAgo.setHours(now.getHours() - 24);
     
-    // Create empty slots for all 24 hours
-    const hourCreators = {};
-    for (let i = 0; i < 24; i++) {
-      const hourAgo = new Date(now);
-      hourAgo.setHours(now.getHours() - i);
-      const hourKey = hourAgo.getHours();
-      hourCreators[hourKey] = new Set(); // Use a Set to count unique creators
-    }
-    
     // Filter tokens by creation time (last 24 hours)
     const relevantTokens = tokensList.filter(token => {
-      const createdAt = new Date(token.createdAt);
-      return createdAt >= twentyFourHoursAgo && createdAt <= now;
+      if (!token.createdAt) return false;
+      
+      const tokenDate = new Date(token.createdAt);
+      return tokenDate >= twentyFourHoursAgo && tokenDate <= now;
     });
     
-    // Group by hour and add creators to sets
+    // Count unique creators per hour slot in our timeline
     relevantTokens.forEach(token => {
-      if (token.createdAt && token.creator) {
-        const date = new Date(token.createdAt);
-        const hour = date.getHours();
-        hourCreators[hour].add(token.creator);
+      if (!token.creator) return;
+      
+      const tokenTime = new Date(token.createdAt).getTime();
+      
+      // Find which hour slot this token belongs to
+      for (let i = 0; i < timestamps.length - 1; i++) {
+        if (tokenTime >= timestamps[i] && tokenTime < timestamps[i + 1]) {
+          creatorsByHour[i].add(token.creator);
+          break;
+        }
       }
-    });
-    
-    // Convert to arrays for Chart.js - in chronological order
-    const hoursSorted = Object.keys(hourCreators)
-      .map(Number)
-      .sort((a, b) => a - b);
-    
-    // Format hour labels with AM/PM
-    const hourLabels = hoursSorted.map(hour => {
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const hour12 = hour % 12 || 12; // Convert 0 to 12 for 12 AM
-      return `${hour12}${ampm}`;
+      
+      // Check the last hour slot separately
+      if (tokenTime >= timestamps[timestamps.length - 1] && tokenTime <= now.getTime()) {
+        creatorsByHour[timestamps.length - 1].add(token.creator);
+      }
     });
     
     // Convert sets to counts
-    const hourData = hoursSorted.map(hour => hourCreators[hour].size);
+    const hourData = creatorsByHour.map(set => set.size);
     
     setChartData({
-      labels: hourLabels,
+      labels,
       data: hourData,
-      title: 'Active Curves',
+      title: 'Last 24 Hours',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => value.toLocaleString()
     });
   };
-  
-  // Chart 3: Total volume over time (last 24 hours)
+
+  // Chart 3: Total volume over time (last 24 hours) - hourly, not cumulative
   const updateVolumeChart = (tokensList) => {
-    // Get current date/time
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now);
-    twentyFourHoursAgo.setHours(now.getHours() - 24);
+    const { labels, timestamps } = generateTimelineLabels();
+    const hourData = Array(24).fill(0);
     
-    // Create empty slots for all 24 hours
-    const hourlyVolume = {};
-    for (let i = 0; i < 24; i++) {
-      const hourAgo = new Date(now);
-      hourAgo.setHours(now.getHours() - i);
-      const hourKey = hourAgo.getHours();
-      hourlyVolume[hourKey] = 0;
-    }
+    // Get tokens with volume data
+    const tokensWithVolume = tokensList.filter(token => 
+      token.createdAt && (token.volume24h !== undefined || token.volume !== undefined)
+    );
     
-    // For each hour, calculate the total volume of all tokens that existed at that time
-    for (let i = 0; i < 24; i++) {
-      const targetHour = new Date(now);
-      targetHour.setHours(now.getHours() - i);
+    // For each hour slot, calculate volume for that specific hour
+    for (let i = 0; i < timestamps.length; i++) {
+      const currentHourStart = timestamps[i];
       
-      // Get tokens that existed at this hour (created before this hour)
-      const tokensAtThisHour = tokensList.filter(token => {
-        const createdAt = new Date(token.createdAt);
-        return createdAt <= targetHour;
+      // Set end timestamp (either next hour or current time if last hour)
+      const currentHourEnd = i < timestamps.length - 1 
+        ? timestamps[i + 1] 
+        : new Date().getTime();
+      
+      // Get tokens that had activity in this hour window
+      tokensWithVolume.forEach(token => {
+        const tokenCreationTime = new Date(token.createdAt).getTime();
+        
+        // Only include tokens created in this specific hour window
+        if (tokenCreationTime >= currentHourStart && tokenCreationTime < currentHourEnd) {
+          // Get hourly volume (daily volume / 24 as an approximation)
+          const volume = parseFloat(token.volume24h || token.volume || 0) / 24;
+          hourData[i] += volume;
+        }
       });
-      
-      // Sum up volume
-      const totalVolume = tokensAtThisHour.reduce((sum, token) => {
-        const volume = parseFloat(token.volume24h) || 0;
-        return sum + volume;
-      }, 0);
-      
-      hourlyVolume[targetHour.getHours()] = totalVolume;
     }
-    
-    // Convert to arrays for Chart.js - in chronological order
-    const hoursSorted = Object.keys(hourlyVolume)
-      .map(Number)
-      .sort((a, b) => a - b);
-    
-    // Format hour labels with AM/PM
-    const hourLabels = hoursSorted.map(hour => {
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const hour12 = hour % 12 || 12; // Convert 0 to 12 for 12 AM
-      return `${hour12}${ampm}`;
-    });
-    
-    const hourData = hoursSorted.map(hour => hourlyVolume[hour]);
     
     setChartData({
-      labels: hourLabels,
+      labels,
       data: hourData,
-      title: 'Active Curves',
+      title: 'Last 24 Hours (Hourly)',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => '$' + formatNumber(value)
     });
   };
-  
-  // Chart 4: Total market cap over time (last 24 hours)
+
+  // Chart 4: Market cap per hour (last 24 hours) - hourly, not cumulative
   const updateMarketCapChart = (tokensList) => {
-    // Get current date/time
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now);
-    twentyFourHoursAgo.setHours(now.getHours() - 24);
+    const { labels, timestamps } = generateTimelineLabels();
+    const hourData = Array(24).fill(0);
     
-    // Create empty slots for all 24 hours
-    const hourlyMarketCap = {};
-    for (let i = 0; i < 24; i++) {
-      const hourAgo = new Date(now);
-      hourAgo.setHours(now.getHours() - i);
-      const hourKey = hourAgo.getHours();
-      hourlyMarketCap[hourKey] = 0;
-    }
+    // Get tokens with market cap data
+    const tokensWithMarketCap = tokensList.filter(token => 
+      token.createdAt && (token.marketCapUSD !== undefined || token.marketCap !== undefined)
+    );
     
-    // For each hour, calculate the total market cap of all tokens that existed at that time
-    for (let i = 0; i < 24; i++) {
-      const targetHour = new Date(now);
-      targetHour.setHours(now.getHours() - i);
+    // For each hour slot, calculate market cap for that specific hour
+    for (let i = 0; i < timestamps.length; i++) {
+      const currentHourStart = timestamps[i];
       
-      // Get tokens that existed at this hour (created before this hour)
-      const tokensAtThisHour = tokensList.filter(token => {
-        const createdAt = new Date(token.createdAt);
-        return createdAt <= targetHour;
+      // Set end timestamp (either next hour or current time if last hour)
+      const currentHourEnd = i < timestamps.length - 1 
+        ? timestamps[i + 1] 
+        : new Date().getTime();
+      
+      // Get tokens that were created in this hour window
+      tokensWithMarketCap.forEach(token => {
+        const tokenCreationTime = new Date(token.createdAt).getTime();
+        
+        // Only include tokens created in this specific hour window
+        if (tokenCreationTime >= currentHourStart && tokenCreationTime < currentHourEnd) {
+          const marketCap = parseFloat(token.marketCapUSD || token.marketCap || 0);
+          hourData[i] += marketCap;
+        }
       });
-      
-      // Sum up market cap
-      const totalMarketCap = tokensAtThisHour.reduce((sum, token) => {
-        const marketCap = parseFloat(token.marketCapUSD) || 0;
-        return sum + marketCap;
-      }, 0);
-      
-      hourlyMarketCap[targetHour.getHours()] = totalMarketCap;
     }
-    
-    // Convert to arrays for Chart.js - in chronological order
-    const hoursSorted = Object.keys(hourlyMarketCap)
-      .map(Number)
-      .sort((a, b) => a - b);
-    
-    // Format hour labels with AM/PM
-    const hourLabels = hoursSorted.map(hour => {
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const hour12 = hour % 12 || 12; // Convert 0 to 12 for 12 AM
-      return `${hour12}${ampm}`;
-    });
-    
-    const hourData = hoursSorted.map(hour => hourlyMarketCap[hour]);
     
     setChartData({
-      labels: hourLabels,
+      labels,
       data: hourData,
-      title: 'Active Curves',
+      title: 'Last 24 Hours (Hourly)',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => '$' + formatNumber(value)
     });
   };
-  
-  // Chart 5: Total holders over time (last 24 hours)
-  const updateHoldersChart = (tokensList) => {
-    // Get current date/time
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now);
-    twentyFourHoursAgo.setHours(now.getHours() - 24);
+
+  // Chart 5: Total buyers over time (last 24 hours)
+  const updateBuyersChart = (tokensList) => {
+    const { labels, timestamps } = generateTimelineLabels();
+    const hourData = Array(24).fill(0);
     
-    // Create empty slots for all 24 hours
-    const hourlyHolders = {};
-    for (let i = 0; i < 24; i++) {
-      const hourAgo = new Date(now);
-      hourAgo.setHours(now.getHours() - i);
-      const hourKey = hourAgo.getHours();
-      hourlyHolders[hourKey] = 0;
-    }
+    // Get tokens with buyers data
+    const tokensWithBuyers = tokensList.filter(token => 
+      token.createdAt && (token.holders !== undefined || token.holderCount !== undefined)
+    );
     
-    // For each hour, calculate the total holders of all tokens that existed at that time
-    for (let i = 0; i < 24; i++) {
-      const targetHour = new Date(now);
-      targetHour.setHours(now.getHours() - i);
+    // For each hour slot in our timeline, calculate cumulative buyers
+    for (let i = 0; i < timestamps.length; i++) {
+      const hourTimestamp = timestamps[i];
       
-      // Get tokens that existed at this hour (created before this hour)
-      const tokensAtThisHour = tokensList.filter(token => {
-        const createdAt = new Date(token.createdAt);
-        return createdAt <= targetHour;
+      // Get tokens that existed at this specific hour
+      const tokensAtThisHour = tokensWithBuyers.filter(token => {
+        const tokenCreationTime = new Date(token.createdAt).getTime();
+        return tokenCreationTime <= hourTimestamp;
       });
       
-      // Sum up holders
-      const totalHolders = tokensAtThisHour.reduce((sum, token) => {
-        const holders = parseInt(token.holderCount) || 0;
-        return sum + holders;
+      // Sum up buyers for this hour
+      hourData[i] = tokensAtThisHour.reduce((sum, token) => {
+        // Try both possible property names for buyers
+        const buyerCount = token.holders || token.holderCount || 0;
+        return sum + parseInt(buyerCount);
       }, 0);
-      
-      hourlyHolders[targetHour.getHours()] = totalHolders;
     }
     
-    // Convert to arrays for Chart.js - in chronological order
-    const hoursSorted = Object.keys(hourlyHolders)
-      .map(Number)
-      .sort((a, b) => a - b);
-    
-    // Format hour labels with AM/PM
-    const hourLabels = hoursSorted.map(hour => {
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const hour12 = hour % 12 || 12; // Convert 0 to 12 for 12 AM
-      return `${hour12}${ampm}`;
-    });
-    
-    const hourData = hoursSorted.map(hour => hourlyHolders[hour]);
-    
     setChartData({
-      labels: hourLabels,
+      labels,
       data: hourData,
-      title: 'Active Curves',
+      title: 'Last 24 Hours',
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => formatNumber(value)
@@ -592,15 +551,33 @@ function App() {
     }
   };
 
-  // Chart data state
-  const [chartData, setChartData] = useState({
-    labels: [],
-    data: [],
-    title: 'Active Curves',
-    backgroundColor: '#00FF00',
-    borderColor: '#00FF00',
-    yAxisFormat: (value) => value.toLocaleString()
-  });
+  // Function to show info tooltip with explanation of chart data
+  const showChartInfo = (chartType) => {
+    let content = '';
+    
+    switch(chartType) {
+      case 'tokens':
+        content = 'Displays the number of tokens created in each hour over the last 24 hours.';
+        break;
+      case 'creators':
+        content = 'Shows the number of unique creators who launched tokens in each hour over the last 24 hours.';
+        break;
+      case 'volume':
+        content = 'Shows the estimated trading volume for each hour (calculated as 1/24th of daily volume for new tokens created in that hour).';
+        break;
+      case 'marketcap':
+        content = 'Displays the market capitalization for new tokens created in each specific hour.';
+        break;
+      case 'buyers':
+        content = 'Shows the number of unique buyers/holders for tokens created in each hour.';
+        break;
+      default:
+        content = 'Chart shows data for the last 24 hours.';
+    }
+    
+    setInfoContent(content);
+    setShowInfoTooltip(true);
+  };
 
   // Chart configuration
   const chartConfig = {
@@ -663,8 +640,8 @@ function App() {
               case 'marketcap':
                 label = `$${formatNumber(value)}`;
                 break;
-              case 'holders':
-                label = `${formatNumber(value)} holder${value !== 1 ? 's' : ''}`;
+              case 'buyers':
+                label = `${formatNumber(value)} buyer${value !== 1 ? 's' : ''}`;
                 break;
               default:
                 label = value.toLocaleString();
@@ -686,10 +663,12 @@ function App() {
           font: {
             size: 11
           },
-          color: '#00FF00'
+          color: '#00FF00',
+          maxTicksLimit: 5,
+          padding: 10
         },
         grid: {
-          color: 'rgba(0, 255, 0, 0.1)'
+          color: 'rgba(0,255,0,0.07)'
         }
       },
       x: {
@@ -700,7 +679,9 @@ function App() {
           font: {
             size: 10
           },
-          color: '#00FF00'
+          color: '#00FF00',
+          maxTicksLimit: 12,
+          padding: 10
         }
       }
     }
@@ -718,7 +699,7 @@ function App() {
             className={`chart-tab ${chartTab === 'tokens' ? 'active' : ''}`}
             onClick={() => changeChartTab('tokens')}
           >
-            {isMobile() ? 'Created' : 'Tokens Created'}
+            {isMobile() ? 'Tokens' : 'Tokens Created'}
           </button>
           <button 
             className={`chart-tab ${chartTab === 'creators' ? 'active' : ''}`}
@@ -739,12 +720,38 @@ function App() {
             {isMobile() ? 'M.Cap' : 'Market Cap'}
           </button>
           <button 
-            className={`chart-tab ${chartTab === 'holders' ? 'active' : ''}`}
-            onClick={() => changeChartTab('holders')}
+            className={`chart-tab ${chartTab === 'buyers' ? 'active' : ''}`}
+            onClick={() => changeChartTab('buyers')}
           >
-            {isMobile() ? "H'der" : 'Holders'}
+            {isMobile() ? "Buy'r" : 'Buyers'}
           </button>
         </div>
+        
+        <div className="chart-header">
+          <div className="chart-title">{chartData.title}</div>
+          <button 
+            className="info-button" 
+            onClick={() => showChartInfo(chartTab)}
+            aria-label="Chart information"
+          >
+            i
+          </button>
+        </div>
+        
+        {showInfoTooltip && (
+          <div className="info-tooltip">
+            <div className="info-tooltip-content">
+              {infoContent}
+            </div>
+            <button 
+              className="info-close" 
+              onClick={() => setShowInfoTooltip(false)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+        
         <Line data={chartConfig} options={{
           ...chartOptions,
           plugins: {
@@ -824,7 +831,7 @@ function App() {
                 <th onClick={() => handleSortClick('ticker')} style={isMobile() ? {maxWidth:'48px',width:'48px',padding:'0 2px'} : {}}>{isMobile() ? 'Tick.' : 'Ticker'}{getSortIndicator('ticker')}</th>
                 <th onClick={() => handleSortClick('volume24h')}>{isMobile() ? 'Vol.' : 'Volume'}{getSortIndicator('volume24h')}</th>
                 <th onClick={() => handleSortClick('marketCapUSD')}>{isMobile() ? 'M.Cap' : 'Market Cap'}{getSortIndicator('marketCapUSD')}</th>
-                <th onClick={() => handleSortClick('holderCount')}>{isMobile() ? "H'der" : 'Holders'}{getSortIndicator('holderCount')}</th>
+                <th onClick={() => handleSortClick('holderCount')}>{isMobile() ? "Buy'r" : 'Buyers'}{getSortIndicator('holderCount')}</th>
                 <th onClick={() => handleSortClick('liquidityPercent')}>{isMobile() ? 'L%' : 'Liquidity %'}{getSortIndicator('liquidityPercent')}</th>
                 <th onClick={() => handleSortClick('createdAt')} className={isMobile() ? 'since-col' : ''}>{isMobile() ? 'Since' : 'Created'}{getSortIndicator('createdAt')}</th>
                 {!isMobile() && <th>{'Contract'}</th>}
@@ -968,7 +975,7 @@ function App() {
                     <div style={{ color: '#00FF00', fontWeight: 600, marginBottom: 7, fontSize: 14 }}>Token Details</div>
                     <div style={{ color: '#fff', marginBottom: 4 }}><b>Volume:</b> ${formatNumber(t.volume24h)}</div>
                     <div style={{ color: '#fff', marginBottom: 4 }}><b>Market Cap:</b> ${formatNumber(t.marketCapUSD)}</div>
-                    <div style={{ color: '#fff', marginBottom: 4 }}><b>Holders:</b> {formatNumber(t.holderCount)}</div>
+                    <div style={{ color: '#fff', marginBottom: 4 }}><b>Buyers:</b> {formatNumber(t.holderCount)}</div>
                     <div style={{ color: '#fff', marginBottom: 4 }}><b>Since:</b> {timeAgo(t.createdAt)}</div>
                     <div style={{ color: '#fff', marginBottom: 4 }}><b>Liq%:</b> {
                       t.liquidityPercent !== undefined && t.liquidityPercent !== null
@@ -988,6 +995,7 @@ function App() {
       <footer>
         <a href="https://auto.fun" target="_blank" rel="noopener noreferrer">auto.fun</a>
         <div className="token-stats">Total active tokens: {tokens.length}</div>
+        <a href="https://github.com/circularr/autofun" target="_blank" rel="noopener noreferrer">GitHub</a>
       </footer>
     </div>
   );
