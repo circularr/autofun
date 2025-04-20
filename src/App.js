@@ -124,7 +124,7 @@ function App() {
   const [filteredTokens, setFilteredTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [chartTab, setChartTab] = useState('tokens');  // 'tokens', 'creators', 'volume', 'buyers'
+  const [chartTab, setChartTab] = useState('tokens');  // 'tokens', 'volume', 'buyers'
   const [cursorVisible, setCursorVisible] = useState(true);
   const [sortConfig, setSortConfig] = useState({
     key: 'marketCapUSD',
@@ -200,9 +200,6 @@ function App() {
       case 'tokens':
         updateTokensCreatedChart(tokensList, mode);
         break;
-      case 'creators':
-        updateUniqueCreatorsChart(tokensList, mode);
-        break;
       case 'volume':
         updateVolumeChart(tokensList, mode);
         break;
@@ -264,61 +261,6 @@ function App() {
     
     // Count tokens per hour slot in our timeline
     relevantTokens.forEach(token => {
-      const tokenTime = new Date(token.createdAt).getTime();
-      
-      // Find which hour slot this token belongs to
-      for (let i = 0; i < timestamps.length - 1; i++) {
-        if (tokenTime >= timestamps[i] && tokenTime < timestamps[i + 1]) {
-          hourData[i]++;
-          break;
-        }
-      }
-      
-      // Check the last hour slot separately
-      if (tokenTime >= timestamps[timestamps.length - 1] && tokenTime <= now.getTime()) {
-        hourData[timestamps.length - 1]++;
-      }
-    });
-    
-    if (mode === 'cumulative') {
-      // Convert to cumulative sum
-      hourData = hourData.reduce((acc, val, idx) => {
-        acc.push((acc[idx - 1] || 0) + val);
-        return acc;
-      }, []);
-    }
-    
-    setChartData({
-      labels,
-      data: hourData,
-      backgroundColor: '#00FF00',
-      borderColor: '#00FF00',
-      yAxisFormat: (value) => value.toLocaleString()
-    });
-  };
-
-  // Chart 2: Unique creators over time (last 24 hours)
-  const updateUniqueCreatorsChart = (tokensList, mode = 'hourly') => {
-    const { labels, timestamps } = generateTimelineLabels();
-    let hourData = Array(24).fill(0);
-    
-    // Get current date/time
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now);
-    twentyFourHoursAgo.setHours(now.getHours() - 24);
-    
-    // Filter tokens by creation time (last 24 hours)
-    const relevantTokens = tokensList.filter(token => {
-      if (!token.createdAt) return false;
-      
-      const tokenDate = new Date(token.createdAt);
-      return tokenDate >= twentyFourHoursAgo && tokenDate <= now;
-    });
-    
-    // Count unique creators per hour slot in our timeline
-    relevantTokens.forEach(token => {
-      if (!token.creator) return;
-      
       const tokenTime = new Date(token.createdAt).getTime();
       
       // Find which hour slot this token belongs to
@@ -531,11 +473,6 @@ function App() {
           ? 'Cumulative: Running total of tokens created up to each hour.'
           : 'Hourly: Number of tokens created in each hour.';
         break;
-      case 'creators':
-        content = mode === 'cumulative'
-          ? 'Cumulative: Running total of unique creators up to each hour.'
-          : 'Hourly: Unique creators who launched tokens in each hour.';
-        break;
       case 'volume':
         content = mode === 'cumulative'
           ? 'Cumulative: Running total of all trading volume up to each hour.'
@@ -595,9 +532,6 @@ function App() {
             switch (chartTab) {
               case 'tokens':
                 label = `${value.toLocaleString()} token${value !== 1 ? 's' : ''}`;
-                break;
-              case 'creators':
-                label = `${value.toLocaleString()} creator${value !== 1 ? 's' : ''}`;
                 break;
               case 'volume':
                 label = `$${formatNumber(value)}`;
@@ -663,12 +597,6 @@ function App() {
             onClick={() => changeChartTab('tokens')}
           >
             {isMobile() ? 'Tokens' : <span style={{color:'#fff'}}>Tokens Created</span>}
-          </button>
-          <button 
-            className={`chart-tab ${chartTab === 'creators' ? 'active' : ''}`}
-            onClick={() => changeChartTab('creators')}
-          >
-            {isMobile() ? 'Creators' : 'Unique Creators'}
           </button>
           <button 
             className={`chart-tab ${chartTab === 'volume' ? 'active' : ''}`}
@@ -803,8 +731,8 @@ function App() {
                 <th onClick={() => handleSortClick('ticker')} style={isMobile() ? {maxWidth:'48px',width:'48px',padding:'0 2px'} : {}}>{isMobile() ? 'Tick.' : 'Ticker'}{getSortIndicator('ticker')}</th>
                 <th onClick={() => handleSortClick('volume24h')}>{isMobile() ? 'Vol.' : 'Volume'}{getSortIndicator('volume24h')}</th>
                 <th onClick={() => handleSortClick('marketCapUSD')}>{isMobile() ? 'M.Cap' : 'Market Cap'}{getSortIndicator('marketCapUSD')}</th>
-                <th onClick={() => handleSortClick('holderCount')}>{isMobile() ? "Buy'r" : 'Buyers'}{getSortIndicator('holderCount')}</th>
-                <th onClick={() => handleSortClick('liquidityPercent')}>{isMobile() ? 'L%' : 'Liquidity %'}{getSortIndicator('liquidityPercent')}</th>
+                <th onClick={() => handleSortClick('holderCount')}>{isMobile() ? "Buyers" : 'Buyers'}{getSortIndicator('holderCount')}</th>
+                <th onClick={() => handleSortClick('liquidityPercent')} className={isMobile() ? 'liq-col' : ''}>{isMobile() ? 'Liq.%' : 'Liquidity %'}{getSortIndicator('liquidityPercent')}</th>
                 <th onClick={() => handleSortClick('createdAt')} className={isMobile() ? 'since-col' : ''}>{isMobile() ? 'Since' : 'Created'}{getSortIndicator('createdAt')}</th>
                 {!isMobile() && <th>{'Contract'}</th>}
               </tr>
