@@ -24,6 +24,21 @@ ChartJS.register(
   Legend
 );
 
+// Glow effect plugin for line charts
+const glowPlugin = {
+  id: 'glow',
+  beforeDatasetDraw(chart, args, options) {
+    const {ctx} = chart;
+    ctx.save();
+    ctx.shadowColor = options.color || 'rgba(0,255,0,0.8)';
+    ctx.shadowBlur = options.blur || 20;
+  },
+  afterDatasetDraw(chart) {
+    chart.ctx.restore();
+  }
+};
+ChartJS.register(glowPlugin);
+
 // Direct API URL (will be proxied client-side to avoid CORS)
 const API_URL = "https://api.auto.fun/api/tokens";
 
@@ -298,8 +313,29 @@ function App() {
     setChartData({
       labels: displayLabels,
       data: displayData,
-      backgroundColor: '#00FF00',
+      backgroundColor: (context) => {
+        // Defensive: Chart.js sometimes calls before chart/chartArea are ready
+        const chart = context && context.chart;
+        const chartArea = chart && chart.chartArea;
+        if (!chart || !chart.ctx || !chartArea) {
+          return 'rgba(0,255,0,0)'; // fallback: transparent
+        }
+        const ctx = chart.ctx;
+        const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+        // Softer neon fill below the line
+        gradient.addColorStop(0, 'rgba(0,255,0,0.28)'); // base, softer
+        gradient.addColorStop(0.25, 'rgba(0,255,0,0.16)');
+        gradient.addColorStop(0.5, 'rgba(0,255,0,0.07)');
+        gradient.addColorStop(0.8, 'rgba(0,255,0,0.03)');
+        gradient.addColorStop(1, 'rgba(0,255,0,0)'); // just under line
+        return gradient;
+      },
       borderColor: '#00FF00',
+      borderWidth: 3,
+      tension: 0, // angular lines only
+      plugins: {
+        glow: { color: 'rgba(0,255,0,0.5)', blur: 22, offsetX: 0, offsetY: 0 }
+      },
       yAxisFormat: (value) => value.toLocaleString()
     });
   };
@@ -351,8 +387,29 @@ function App() {
     setChartData({
       labels: displayLabels,
       data: displayData,
-      backgroundColor: '#00FF00',
+      backgroundColor: (context) => {
+        // Defensive: Chart.js sometimes calls before chart/chartArea are ready
+        const chart = context && context.chart;
+        const chartArea = chart && chart.chartArea;
+        if (!chart || !chart.ctx || !chartArea) {
+          return 'rgba(0,255,0,0)'; // fallback: transparent
+        }
+        const ctx = chart.ctx;
+        const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+        // Softer neon fill below the line
+        gradient.addColorStop(0, 'rgba(0,255,0,0.28)'); // base, softer
+        gradient.addColorStop(0.25, 'rgba(0,255,0,0.16)');
+        gradient.addColorStop(0.5, 'rgba(0,255,0,0.07)');
+        gradient.addColorStop(0.8, 'rgba(0,255,0,0.03)');
+        gradient.addColorStop(1, 'rgba(0,255,0,0)'); // just under line
+        return gradient;
+      },
       borderColor: '#00FF00',
+      borderWidth: 3,
+      tension: 0, // angular lines only
+      plugins: {
+        glow: { color: 'rgba(0,255,0,0.5)', blur: 22, offsetX: 0, offsetY: 0 }
+      },
       yAxisFormat: (value) => '$' + formatNumber(value)
     });
   };
@@ -404,8 +461,29 @@ function App() {
     setChartData({
       labels: displayLabels,
       data: displayData,
-      backgroundColor: '#00FF00',
+      backgroundColor: (context) => {
+        // Defensive: Chart.js sometimes calls before chart/chartArea are ready
+        const chart = context && context.chart;
+        const chartArea = chart && chart.chartArea;
+        if (!chart || !chart.ctx || !chartArea) {
+          return 'rgba(0,255,0,0)'; // fallback: transparent
+        }
+        const ctx = chart.ctx;
+        const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+        // Softer neon fill below the line
+        gradient.addColorStop(0, 'rgba(0,255,0,0.28)'); // base, softer
+        gradient.addColorStop(0.25, 'rgba(0,255,0,0.16)');
+        gradient.addColorStop(0.5, 'rgba(0,255,0,0.07)');
+        gradient.addColorStop(0.8, 'rgba(0,255,0,0.03)');
+        gradient.addColorStop(1, 'rgba(0,255,0,0)'); // just under line
+        return gradient;
+      },
       borderColor: '#00FF00',
+      borderWidth: 3,
+      tension: 0, // angular lines only
+      plugins: {
+        glow: { color: 'rgba(0,255,0,0.5)', blur: 22, offsetX: 0, offsetY: 0 }
+      },
       yAxisFormat: (value) => formatNumber(value)
     });
   };
@@ -529,11 +607,12 @@ function App() {
       {
         label: 'Count',
         data: chartData.data,
-        fill: false,
+        fill: 'start',
         backgroundColor: chartData.backgroundColor,
-        borderColor: '#00FF00',
-        borderWidth: 2,
-        tension: 0, // Use 0 for angular lines (not curved)
+        borderColor: chartData.borderColor,
+        borderWidth: chartData.borderWidth,
+        plugins: chartData.plugins,
+        tension: chartData.tension,
         pointBackgroundColor: '#00FF00',
         pointBorderColor: '#000',
         pointRadius: 4,
@@ -578,6 +657,12 @@ function App() {
             return label;
           }
         }
+      },
+      glow: {
+        color: 'rgba(0,255,0,1)',
+        blur: 40,
+        offsetX: 0,
+        offsetY: 0
       }
     },
     scales: {
@@ -601,7 +686,8 @@ function App() {
       },
       x: {
         grid: {
-          display: false
+          display: true,
+          color: 'rgba(0,255,0,0.07)'
         },
         ticks: {
           font: {
@@ -733,7 +819,8 @@ function App() {
               },
               grid: {
                 ...chartOptions.scales.x.grid,
-                display: false
+                color: 'rgba(0,255,0,0.07)',
+                display: true
               }
             }
           },
