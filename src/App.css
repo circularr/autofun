@@ -543,42 +543,52 @@ footer a:hover:after {
     margin-right: -5px;
     width: calc(100% + 10px);
     max-width: none;
+    border-radius: 10px;
+    border: 1.5px solid var(--neon-green);
+    box-shadow: 0 2px 12px rgba(0,255,0,0.07);
   }
   
   table {
     width: 100%;
     table-layout: fixed;
+    border-collapse: collapse;
+    background: var(--card-bg);
   }
   
   /* Ensure all table rows have consistent borders */
   tr {
-    border-bottom: 1px solid rgba(0, 255, 0, 0.1);
+    border-bottom: 1.5px solid rgba(0, 255, 0, 0.25);
+    background: none;
   }
   
-  td {
-    font-size: 12px;
-    border-bottom: none; /* Remove individual cell borders */
-    padding: 6px 3px;
+  td, th {
+    font-size: 13px;
+    border-bottom: none;
+    padding: 10px 6px;
+    text-align: center;
+    vertical-align: middle;
+    background: none;
   }
-  
+
   th {
-    font-size: 12px;
-    padding: 6px 3px;
+    font-weight: 700;
+    color: var(--neon-green);
+    border-bottom: 2px solid rgba(0,255,0,0.25);
+    background: rgba(0,255,0,0.03);
   }
-  
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
   th:last-child,
   td:last-child {
     max-width: 42px;
-    min-width: 36px;
-    width: 42px;
-    font-size: 10px;
-    color: var(--neon-green);
-    padding: 0 2px !important;
-    text-align: right;
-    letter-spacing: 0.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  
+
   td.ticker-col, th.ticker-col {
     max-width: 44px;
     width: 44px;
@@ -587,7 +597,7 @@ footer a:hover:after {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  
+
   td.since-col, th.since-col {
     max-width: 42px;
     min-width: 36px;
@@ -600,10 +610,18 @@ footer a:hover:after {
     letter-spacing: 0px;
     font-weight: inherit;
   }
-  
+
   .chart-container {
     padding: 10px 5px 30px 5px;
     height: 250px;
+  }
+
+  /* Ensure all mobile columns are centered, even special ones */
+  td.ticker-col, th.ticker-col,
+  td.since-col, th.since-col {
+    text-align: center !important;
+    justify-content: center;
+    align-items: center;
   }
 }
 
