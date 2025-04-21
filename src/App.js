@@ -284,10 +284,20 @@ function App() {
         return acc;
       }, []);
     }
-    
+
+    // Remove the last hour if it's not full yet
+    const currentMinutes = now.getMinutes();
+    let displayLabels = [...labels];
+    let displayData = [...hourData];
+    if (currentMinutes !== 0) {
+      // Remove the last hour slot (incomplete)
+      displayLabels.pop();
+      displayData.pop();
+    }
+
     setChartData({
-      labels,
-      data: hourData,
+      labels: displayLabels,
+      data: displayData,
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => value.toLocaleString()
@@ -327,9 +337,20 @@ function App() {
         return acc;
       }, []);
     }
+
+    // Remove the last hour if it's not full yet
+    const now = new Date();
+    const currentMinutes = now.getMinutes();
+    let displayLabels = [...labels];
+    let displayData = [...hourData];
+    if (currentMinutes !== 0) {
+      displayLabels.pop();
+      displayData.pop();
+    }
+
     setChartData({
-      labels,
-      data: hourData,
+      labels: displayLabels,
+      data: displayData,
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => '$' + formatNumber(value)
@@ -369,9 +390,20 @@ function App() {
         return acc;
       }, []);
     }
+
+    // Remove the last hour if it's not full yet
+    const now = new Date();
+    const currentMinutes = now.getMinutes();
+    let displayLabels = [...labels];
+    let displayData = [...hourData];
+    if (currentMinutes !== 0) {
+      displayLabels.pop();
+      displayData.pop();
+    }
+
     setChartData({
-      labels,
-      data: hourData,
+      labels: displayLabels,
+      data: displayData,
       backgroundColor: '#00FF00',
       borderColor: '#00FF00',
       yAxisFormat: (value) => formatNumber(value)
