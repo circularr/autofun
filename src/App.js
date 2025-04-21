@@ -866,6 +866,28 @@ function App() {
                   fontSize: 15
                 }}
               >Go</a>
+              <a
+                href={`https://sniper.xyz/token/${activeAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "inline-block",
+                  background: "#00FF00",
+                  color: "#000",
+                  fontWeight: 600,
+                  textAlign: "center",
+                  textDecoration: "none",
+                  padding: "10px 0",
+                  width: "80%",
+                  maxWidth: 320,
+                  border: "none",
+                  marginBottom: 10,
+                  letterSpacing: 1,
+                  fontSize: 15,
+                }}
+              >
+                Trade on Sniper.xyz
+              </a>
               {/* Show missing info on mobile */}
               {isMobile() && filteredTokens && (() => {
                 const t = filteredTokens.find(tok => (tok.mint || tok.contractAddress || tok.id) === activeAddress);
