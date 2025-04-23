@@ -1,6 +1,6 @@
 # auto.fun Token Tracker
 
-A fun, experimental token tracker web app for the auto.fun ecosystem.
+A .fun, experimental token tracker web app for the auto.fun ecosystem.
 
 ## Features
 - View tokens with volume, market cap, holders, liquidity %, and more
@@ -51,4 +51,4 @@ MIT
 
 ---
 
-> No idea if it works, no idea if data is right, but fun!
+> No idea if it works, no idea if data is right, but fun
